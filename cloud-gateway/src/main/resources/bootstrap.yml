@@ -1,0 +1,9 @@
+spring:
+  profiles:
+    active:
+    - develop
+  main:
+    web-application-type: reactive
+  config:
+    import: configserver:${CONFIG_SERVER}
+  

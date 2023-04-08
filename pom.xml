@@ -1,0 +1,17 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.mitocode</groupId>
+  <artifactId>DriverLicense</artifactId>
+  <version>0.0.1-SNAPSHOT</version>
+  <packaging>pom</packaging>
+  <name>Driver License Project</name>
+  <description>Root Project</description>
+  <modules>
+        <module>config-server</module>
+        <module>discovery-server</module>
+        <module>cloud-gateway</module>
+        <module>license-write-service</module>
+        <module>license-read-service</module>
+        <module>audit-service</module>
+    </modules>
+</project>

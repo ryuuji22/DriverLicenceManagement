@@ -1,0 +1,276 @@
+version: '2.1'
+services:
+  audit-service:
+    image: 'audit-service'
+    ports:
+      - "9004"
+    build:
+      context: audit-service
+      dockerfile: Dockerfile
+    container_name: audit-service
+    depends_on:
+      config-server:
+         condition: service_healthy
+      discovery-server:
+         condition: service_started
+      mysqldb:
+         condition: service_started
+      kafka:
+         condition: service_started
+    environment:
+      - TZ=America/Guayaquil
+      - CONFIG_SERVER=http://config-server:8763/
+      - SPRING_DATABASE_PROVIDER=MYSQL
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysqldb:3306/audit
+      - SPRING_DATASOURCE_USERNAME=mysql
+      - SPRING_DATASOURCE_PASSWORD=mysql
+      - SPRING_DATASOURCE_DRIVERCLASSNAME=com.mysql.cj.jdbc.Driver
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+      - EUREKA_HOST_SERVER=http://discovery-server:8761/eureka
+      - CUSTOM_SERVER_PORT=9004
+      - KAFKA_BOOSTRAP_SERVER=kafka:9092
+      
+  license-read-service:
+    image: 'license-read-service'
+    ports:
+      - "9003"
+    build:
+      context: license-read-service
+      dockerfile: Dockerfile
+    container_name: license-read-service
+    depends_on:
+      config-server:
+         condition: service_healthy
+      discovery-server:
+         condition: service_started
+      mongodb:
+         condition: service_started
+      kafka:
+         condition: service_started
+    environment:
+      - TZ=America/Guayaquil
+      - CONFIG_SERVER=http://config-server:8763/
+      - SPRING_DATASOURCE_HOST=mongodb
+      - SPRING_DATASOURCE_PORT=27017
+      - SPRING_DATASOURCE_DATABASE=license
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=password
+      - SPRING_DATASOURCE_AUTHENTICATION_DATABASE=admin
+      - EUREKA_HOST_SERVER=http://discovery-server:8761/eureka
+      - CUSTOM_SERVER_PORT=9003
+      - KAFKA_BOOSTRAP_SERVER=kafka:9092
+   
+  license-write-service:
+    image: 'license-write-service'
+    ports:
+      - "9002"
+    build:
+      context: license-write-service
+      dockerfile: Dockerfile
+    container_name: license-write-service
+    depends_on:
+      config-server:
+         condition: service_healthy
+      discovery-server:
+         condition: service_started
+      postgresql:
+         condition: service_started
+      kafka:
+         condition: service_started
+      keycloak:
+         condition: service_started
+    environment:
+      - TZ=America/Guayaquil
+      - CONFIG_SERVER=http://config-server:8763/
+      - SPRING_DATABASE_PROVIDER=POSTGRESQL
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgresql:5432/licenses
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=postgres
+      - SPRING_DATASOURCE_DRIVERCLASSNAME=org.postgresql.Driver
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+      - EUREKA_HOST_SERVER=http://discovery-server:8761/eureka
+      - CUSTOM_SERVER_PORT=9002
+      - KAFKA_BOOSTRAP_SERVER=kafka:9092
+      - OAUTH2_ISSUER_URI=http://keycloak:8080/auth/realms/SpringBootKeycloak
+  
+  cloud-gateway:
+    image: 'cloud-gateway'
+    ports:
+      - "8762:8762"
+    build:
+      context: cloud-gateway
+      dockerfile: Dockerfile
+    container_name: cloud-gateway
+    depends_on:
+      config-server:
+         condition: service_healthy
+      discovery-server:
+         condition: service_started
+      keycloak:
+         condition: service_started
+    environment:
+      - TZ=America/Guayaquil
+      - CONFIG_SERVER=http://config-server:8763/
+      - CUSTOM_SERVER_PORT=8762
+      - EUREKA_HOST_SERVER=http://discovery-server:8761/eureka
+      - OAUTH2_ISSUER_URI=http://keycloak:8080/auth/realms/SpringBootKeycloak
+      - AUTH_CONVERTER_RESOURCEID=springboot-keycloak-client
+      - AUTH_CONVERTER_PRINCIPAL_ATRIBUTE=preferred_username
+      
+      
+  config-server:
+    image: 'config-server'
+    ports:
+      - "8763"
+    build:
+      context: config-server
+      dockerfile: Dockerfile
+    container_name: config-server
+    environment:
+      - TZ=America/Guayaquil
+      - CUSTOM_SERVER_PORT=8763
+      - GIT_URI=https://github.com/ryuuji22/SpringCloudConfig-GitRepository.git
+      - GIT_BRANCH=develop
+      - ENCRYPT_KEY=secrets
+    healthcheck:
+      test: "curl --fail --silent localhost:8763/actuator/health | grep UP || exit 1"
+      interval: 10s
+      timeout: 2s
+      retries: 10
+  
+  discovery-server:
+    image: 'discovery-server'
+    ports:
+      - "8761:8761"
+    build:
+      context: discovery-server
+      dockerfile: Dockerfile
+    container_name: discovery-server
+    environment:
+      - TZ=America/Guayaquil
+      - CUSTOM_SERVER_PORT=8761
+      - EUREKA_HOSTNAME=discovery-server
+  
+  mysqldb:
+    image: mysql:5.7
+    ports:
+      - "3306"
+    container_name: mysqldb
+    volumes:
+      - ./mysql/data:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_USER: root
+      MYSQL_ROOT_PASSWORD: secret
+      MYSQL_DATABASE: audit
+      MYSQL_USER: mysql
+      MYSQL_PASSWORD: mysql
+  
+  mongodb:
+    image: mongo:5.0
+    container_name: mongodb
+    environment:
+      - MONGO_INITDB_ROOT_DATABASE=license
+      - MONGO_NON_ROOT_USERNAME=mongodb
+      - MONGO_NON_ROOT_PASSWORD=mongodb
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=password
+    restart: unless-stopped
+    ports:
+      - "27017"
+    volumes:
+      - ./mongodb/database/db:/data/db
+  
+  mongo-express:
+    image: mongo-express
+    container_name: mexpress
+    depends_on:
+      - mongodb
+    environment:
+      - ME_CONFIG_MONGODB_ADMINUSERNAME=root
+      - ME_CONFIG_MONGODB_ADMINPASSWORD=password
+      - ME_CONFIG_MONGODB_URL=mongodb://root:password@mongodb:27017/?authSource=admin
+      - ME_CONFIG_BASICAUTH_USERNAME=mexpress
+      - ME_CONFIG_BASICAUTH_PASSWORD=mexpress
+    links:
+      - mongodb
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+      
+  postgresql:
+    image: 'postgres:13.1-alpine'
+    ports:
+      - "25432:5432"
+    container_name: postresql
+    volumes:
+      - ./postgres:/var/lib/postgresql/data
+    environment:
+      - TZ=America/Guayaquil
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=licenses
+      
+  keycloak:
+    image: quay.io/keycloak/keycloak:15.0.1
+    ports:
+      - "8080:8080"
+    container_name: keycloak
+    environment:
+      - KEYCLOAK_USER=admin
+      - KEYCLOAK_PASSWORD=admin
+      - KEYCLOAK_IMPORT=/tmp/realm.json
+      - KEYCLOAK_FRONTEND_URL=https://keycloak
+      - KEYCLOAK_HOSTNAME=keycloak
+    volumes:
+      - ./keycloak/realm.json:/tmp/realm.json
+  
+  prometheus:
+    image: prom/prometheus:v2.38.0
+    container_name: prometheus
+    restart: always
+    volumes:
+      - ./prometheus/data/prometheus/config:/etc/prometheus/
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yaml'
+    ports:
+      - "9090:9090"
+  
+  grafana:
+    image: grafana/grafana-oss:8.5.2
+    pull_policy: always
+    depends_on:
+      - prometheus
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana/datasources:/etc/grafana/provisioning/datasources/
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards/
+      - ./grafana/data/grafana:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SERVER_DOMAIN=localhost
+  
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - 2181
+  
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    depends_on:
+      - zookeeper
+    ports:
+      - 29092
+    container_name: kafka
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
